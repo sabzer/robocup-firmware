@@ -110,10 +110,10 @@ void kick(uint8_t strength) {
   float time_cnt_flt_ms =
       KICK_TIME_SLOPE * strength_ratio + MIN_EFFECTIVE_KICK_FET_EN_TIME;
   float time_cnt_flt = time_cnt_flt_ms * TIMER_PER_MS;
-  timer_cnts_left_ = (int)(time_cnt_flt + 0.5f); // round
+  timer_cnts_left_ = 8; // (int)(time_cnt_flt + 0.5f); // round
 
   // start timer to enable the kick FSM processing interrupt
-  // TCCR0 |= _BV(CS01);
+  TCCR0 |= _BV(CS00);
   // TCCR0 |= 0b010;
 }
 
@@ -146,8 +146,8 @@ void main() {
       char kick_db_pressed = !(PIND & _BV(DB_KICK_PIN));
       char charge_db_pressed = !(PIND & _BV(DB_CHG_PIN));
 
-      PORTC |= _BV(MCU_RED);
-      PORTC &= ~(charge_db_pressed ? _BV(MCU_RED) : 0);
+      /* PORTC |= _BV(MCU_RED); */
+      /* PORTC &= ~(charge_db_pressed ? _BV(MCU_RED) : 0); */
 
       if (!kick_db_down_ && kick_db_pressed)
         kick(255);
@@ -249,6 +249,8 @@ void init() {
 
   PORTC |= _BV(MCU_YELLOW);
   PORTC |= _BV(MCU_RED);
+
+  DDRB |= _BV(CHIP_PIN);
 
   // latch debug state
   _in_debug_mode = (PINC & _BV(DB_SWITCH));
@@ -399,7 +401,7 @@ ISR(TIMER0_COMP_vect) {
 
     // set KICK pin
     PORTC &= ~(_BV(MCU_RED));
-    PORTC |= _BV(KICK_PIN);
+    PORTB |= _BV(CHIP_PIN);
 
     timer_cnts_left_--;
   } else if (post_kick_cooldown_ >= 0) {
@@ -411,7 +413,7 @@ ISR(TIMER0_COMP_vect) {
 
     // kick is done
     PORTC |= _BV(MCU_RED);
-    PORTC &= ~_BV(KICK_PIN);
+    PORTB &= ~_BV(CHIP_PIN);
 
     post_kick_cooldown_--;
   } else if (kick_wait_ >= 0) {
@@ -430,8 +432,8 @@ ISR(TIMER0_COMP_vect) {
      */
 
     // stop prescaled timer
-    // TCCR0 &= ~_BV(CS01);
-    TCCR0 &= 0b00;
+    TCCR0 &= ~_BV(CS00);
+    // TCCR0 &= 0b00;
   }
 }
 
