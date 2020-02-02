@@ -49,6 +49,10 @@ volatile int32_t timer_cnts_left_ = -1;
 volatile int32_t post_kick_cooldown_ = -1;
 volatile int32_t kick_wait_ = -1;
 
+//Check for chip type
+volatile bool kick_type_is_chip_ = false;
+volatile bool kick_type_is_chip_command_ = false;
+
 // Used to keep track of current button state
 volatile int kick_db_down_ = 0;
 volatile int chip_db_down_ = 0;
@@ -92,7 +96,7 @@ bool is_kicking() {
  * start the kick FSM for desired strength. If the FSM is already running,
  * the call will be ignored.
  */
-void kick(uint8_t strength) {
+void kick(uint8_t strength, bool is_chip) {
 
   // check if the kick FSM is running
   if (is_kicking())
@@ -110,7 +114,9 @@ void kick(uint8_t strength) {
   float time_cnt_flt_ms =
       KICK_TIME_SLOPE * strength_ratio + MIN_EFFECTIVE_KICK_FET_EN_TIME;
   float time_cnt_flt = time_cnt_flt_ms * TIMER_PER_MS;
-  timer_cnts_left_ = 8; // (int)(time_cnt_flt + 0.5f); // round
+  timer_cnts_left_ = (int)(time_cnt_flt + 0.5f); // round
+
+  kick_type_is_chip_ = is_chip;
 
   // start timer to enable the kick FSM processing interrupt
   TCCR0 |= _BV(CS00);
@@ -145,26 +151,31 @@ void main() {
       /* PORTC &= ~(_BV(MCU_YELLOW)); */
       char kick_db_pressed = !(PIND & _BV(DB_KICK_PIN));
       char charge_db_pressed = !(PIND & _BV(DB_CHG_PIN));
+      char chip_db_pressed = !(PINB & _BV(DB_CHIP_PIN));
 
       /* PORTC |= _BV(MCU_RED); */
       /* PORTC &= ~(charge_db_pressed ? _BV(MCU_RED) : 0); */
 
       if (!kick_db_down_ && kick_db_pressed)
-        kick(255);
+        kick(255, false);
+
+      if(!chip_db_down_ && chip_db_pressed)
+        kick(255, true);
 
       if (!charge_db_down_ && charge_db_pressed)
         charge_commanded_ = !charge_commanded_;
 
       kick_db_down_ = kick_db_pressed;
+      chip_db_down_ = chip_db_pressed;
       charge_db_down_ = charge_db_pressed;
     } else {
       /* PORTC &= ~(_BV(MCU_YELLOW)); */
     }
 
     if (PINA & _BV(BALL_SENSE_RX))
-      PORTD &= ~(_BV(BALL_SENSE_LED));
+      PORTB &= ~(_BV(BALL_SENSE_LED));
     else
-      PORTD |= _BV(BALL_SENSE_LED);
+      PORTB |= _BV(BALL_SENSE_LED);
 
     if (is_kicking())
       PORTC &= ~(_BV(MCU_YELLOW));
@@ -223,7 +234,7 @@ void main() {
 
     if (ball_sensed_ && kick_on_breakbeam_) {
       // pow
-      kick(kick_on_breakbeam_strength_);
+      kick(kick_on_breakbeam_strength_,false);
       kick_on_breakbeam_ = false;
     }
 
@@ -269,9 +280,10 @@ void init() {
   DDRD &= ~(_BV(LT_DONE_N) | _BV(LT_FAULT_N));
 
   // configure ball sense
-  DDRD |= (_BV(BALL_SENSE_TX) | _BV(BALL_SENSE_LED));
+  DDRD |= (_BV(BALL_SENSE_TX));
+  DDRB |= _BV(BALL_SENSE_LED);
   // PORTD &= ~(_BV(BALL_SENSE_TX));
-  PORTD |= _BV(BALL_SENSE_LED);
+  PORTB |= _BV(BALL_SENSE_LED);
   PORTD |= _BV(BALL_SENSE_TX);
   DDRA &= ~(_BV(BALL_SENSE_RX));
 
@@ -279,7 +291,7 @@ void init() {
   DDRC &= ~(_BV(DB_SWITCH));
   DDRD &=
       ~(_BV(DB_CHG_PIN) | _BV(DB_KICK_PIN));
-  DDRB &= ~(_BV(DB_CHIP_PIN));
+  DDRB |= (_BV(DB_CHIP_PIN));
 
   // disable JTAG
   MCUCSR |= (1 << JTD);
@@ -401,7 +413,11 @@ ISR(TIMER0_COMP_vect) {
 
     // set KICK pin
     PORTC &= ~(_BV(MCU_RED));
+    if (kick_type_is_chip_) {
     PORTB |= _BV(CHIP_PIN);
+    } else {
+      PORTB |= _BV(KICK_PIN);
+    }
 
     timer_cnts_left_--;
   } else if (post_kick_cooldown_ >= 0) {
@@ -413,7 +429,11 @@ ISR(TIMER0_COMP_vect) {
 
     // kick is done
     PORTC |= _BV(MCU_RED);
-    PORTB &= ~_BV(CHIP_PIN);
+    if (kick_type_is_chip_) {
+      PORTB &= ~_BV(CHIP_PIN);
+    } else {
+      PORTB &= ~_BV(KICK_PIN);
+    }
 
     post_kick_cooldown_--;
   } else if (kick_wait_ >= 0) {
@@ -462,7 +482,7 @@ uint8_t execute_cmd(uint8_t cmd) {
     kick_on_breakbeam_ = true;
     kick_on_breakbeam_strength_ = kick_power;
   } else if (kick_activation == KICK_IMMEDIATE) {
-    kick(kick_power);
+    kick(kick_power,false);
   } else if (kick_activation == CANCEL_KICK) {
     kick_on_breakbeam_ = false;
     kick_on_breakbeam_strength_ = 0;
