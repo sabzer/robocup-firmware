@@ -126,8 +126,10 @@ int main() {
                                &motionCommand,
                                &motorFeedback,
                                &motorCommand);
-    IMUModule imu(sharedI2C,
-                  &imuData);
+    // IMUModule imu(sharedI2C,
+    //               &imuData);
+
+    // led.fullyInitialized();
 
     led.fullyInitialized();
 
