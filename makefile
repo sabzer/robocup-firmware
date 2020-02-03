@@ -19,8 +19,12 @@ ROBOT_TESTS = test
 
 robot : robot/build/conaninfo.txt
 	cd robot && conan build . -bf build
+
+# Temp fix
 control-upload: configure
-	cd robot/build; make control-upload
+	./util/flash-mtrain
+# cd robot/build; make control-upload
+
 $(ROBOT_TESTS:%=test-%-upload): configure
 	cd robot/build; make $(@F)
 
@@ -28,9 +32,12 @@ $(ROBOT_TESTS:%=test-%-upload): configure
 debug : BUILDTYPE = "Debug"
 debug : kicker robot
 
+docs:
+	doxygen doc/Doxyfile
+	cp doc/doxygen.css doc/generated-docs/html/
+
 clean:
 	rm -rf kicker/build
 	rm -rf robot/build
-
-# conan remove RoboCupFirmware/* --builds
-# conan remove mTrain/* --builds
+	conan remove RoboCupFirmware/* --builds
+	conan remove mTrain/* --builds
