@@ -323,7 +323,7 @@ void init() {
   //
   //  initialize timer
   TIMSK |= _BV(OCIE0);    // Interrupt on TIMER 0
-  TCCR0 |= _BV(COM01);    // COM01 - Clear Timer on Compare Match
+  // TCCR0 |= _BV(COM01);    // COM01 - Clear Timer on Compare Match
   OCR0 = TIMING_CONSTANT; // OCR0A is max val of timer before reset
   ///////////////////////////////////////////////////////////////////////////
 
@@ -414,7 +414,7 @@ ISR(TIMER0_COMP_vect) {
     // set KICK pin
     PORTC &= ~(_BV(MCU_RED));
     if (kick_type_is_chip_) {
-    PORTB |= _BV(CHIP_PIN);
+      PORTB |= _BV(CHIP_PIN);
     } else {
       PORTB |= _BV(KICK_PIN);
     }
